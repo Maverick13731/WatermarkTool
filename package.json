@@ -1,0 +1,22 @@
+{
+  "name": "watermarktool",
+  "version": "1.0.0",
+  "description": "An Electron application to apply watermarks to images.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build-win": "electron-packager . WatermarkTool --platform=win32 --arch=x64 --overwrite",
+    "build-linux": "electron-packager . WatermarkTool --platform=linux --arch=x64 --overwrite",
+    "build-mac": "electron-packager . WatermarkTool --platform=darwin --arch=x64 --overwrite"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^25.2.0",
+    "electron-packager": "^17.1.1",
+    "electron-reload": "^2.0.0-alpha.1"
+  },
+  "dependencies": {
+    "sharp": "^0.32.1"
+  }
+}

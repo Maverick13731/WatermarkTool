@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>圖片浮水印添加工具</title>
+    <style>
+        /* 基本樣式設定 */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            margin-bottom: 20px;
+        }
+        #upload-area {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+        }
+        #preview-area {
+            display: flex;
+            flex-wrap: wrap;
+        }
+        .preview-image {
+            margin: 10px;
+            width: 150px;
+            height: 150px;
+            overflow: hidden;
+            position: relative;
+            border: 1px solid #ddd;
+            cursor: pointer;
+        }
+        .preview-image img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        .preview-image input[type="checkbox"] {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+        }
+        #adjustment-area label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        #large-image-display {
+            text-align: center;
+        }
+        #large-image-display img {
+            max-width: 100%;
+            height: auto;
+        }
+        #output-area button {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 上傳區 -->
+    <div id="upload-area" class="section">
+        <h2>上傳區</h2>
+        <input type="file" id="image-upload" multiple accept="image/*">
+        <p>或拖曳圖片到此區域上傳</p>
+    </div>
+
+    <!-- 預覽區 -->
+    <div id="preview-area" class="section">
+        <h2>預覽區</h2>
+        <!-- 預覽圖片將動態生成 -->
+    </div>
+
+    <!-- 數值調整區 -->
+    <div id="adjustment-area" class="section">
+        <h2>數值調整區</h2>
+        <label for="watermark-text">浮水印文字：</label>
+        <input type="text" id="watermark-text" value="RIVERBIEN">
+
+        <label for="watermark-angle">角度：</label>
+        <input type="number" id="watermark-angle" value="0">
+
+        <label for="watermark-color">顏色：</label>
+        <input type="color" id="watermark-color" value="#FFFFFF">
+
+        <label for="watermark-font">字體：</label>
+        <select id="watermark-font">
+            <option value="Optima">Optima</option>
+            <!-- 可添加其他字體選項 -->
+        </select>
+
+        <label for="watermark-logo">上傳Logo圖片：</label>
+        <input type="file" id="watermark-logo" accept="image/*">
+    </div>
+
+    <!-- 顯示單張大圖區 -->
+    <div id="large-image-display" class="section">
+        <h2>顯示單張大圖區</h2>
+        <img id="large-preview" src="" alt="大圖預覽">
+    </div>
+
+    <!-- 輸出區 -->
+    <div id="output-area" class="section">
+        <h2>輸出區</h2>
+        <button id="select-all">全選</button>
+        <button id="deselect-all">取消全選</button>
+        <button id="export">輸出到桌面資料夾(浮水印添加成功)</button>
+    </div>
+
+    <!-- JavaScript區域 -->
+    <script>
+        // 全局變量
+        let images = [];
+        let watermarkLogo = null;
+
+        // 獲取DOM元素
+        const imageUpload = document.getElementById('image-upload');
+        const previewArea = document.getElementById('preview-area');
+        const watermarkTextInput = document.getElementById('watermark-text');
+        const watermarkAngleInput = document.getElementById('watermark-angle');
+        const watermarkColorInput = document.getElementById('watermark-color');
+        const watermarkFontSelect = document.getElementById('watermark-font');
+        const watermarkLogoInput = document.getElementById('watermark-logo');
+        const largePreview = document.getElementById('large-preview');
+        const selectAllBtn = document.getElementById('select-all');
+        const deselectAllBtn = document.getElementById('deselect-all');
+        const exportBtn = document.getElementById('export');
+
+        // 上傳圖片
+        imageUpload.addEventListener('change', handleImageUpload);
+        watermarkLogoInput.addEventListener('change', handleWatermarkLogoUpload);
+
+        // 全選、取消全選、輸出按鈕
+        selectAllBtn.addEventListener('click', selectAllImages);
+        deselectAllBtn.addEventListener('click', deselectAllImages);
+        exportBtn.addEventListener('click', exportImages);
+
+        // 更新浮水印設置
+        watermarkTextInput.addEventListener('input', updateWatermarks);
+        watermarkAngleInput.addEventListener('input', updateWatermarks);
+        watermarkColorInput.addEventListener('input', updateWatermarks);
+        watermarkFontSelect.addEventListener('change', updateWatermarks);
+
+        function handleImageUpload(event) {
+            const files = event.target.files;
+            for (let file of files) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+
+                        // 添加浮水印
+                        addWatermark(ctx, img.width, img.height);
+
+                        const dataUrl = canvas.toDataURL();
+                        images.push({
+                            original: img,
+                            canvas: canvas,
+                            dataUrl: dataUrl,
+                            selected: true
+                        });
+                        displayPreviewImages();
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function handleWatermarkLogoUpload(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        watermarkLogo = img;
+                        updateWatermarks();
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            }
+        }
+
+        function addWatermark(ctx, width, height) {
+            const watermarkText = watermarkTextInput.value;
+            const angle = parseFloat(watermarkAngleInput.value);
+            let color = watermarkColorInput.value;
+            const font = watermarkFontSelect.value;
+
+            // 判斷背景亮度，自動調整浮水印顏色
+            const imageData = ctx.getImageData(0, 0, width, height);
+            const brightness = getImageBrightness(imageData);
+            if (brightness > 200) {
+                color = '#000000'; // 背景為白色，浮水印設為黑色
+            }
+
+            ctx.save();
+            ctx.translate(width / 2, height / 2);
+            ctx.rotate(angle * Math.PI / 180);
+
+            // 計算浮水印大小
+            let watermarkSize = calculateWatermarkSize(width, height);
+
+            ctx.font = `${watermarkSize}px ${font}`;
+            ctx.fillStyle = color;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            // 設置透明度
+            const opacity = calculateOpacity(brightness);
+            ctx.globalAlpha = opacity;
+
+            if (watermarkLogo) {
+                // 使用Logo圖片作為浮水印
+                const ratio = watermarkSize / Math.max(watermarkLogo.width, watermarkLogo.height);
+                const logoWidth = watermarkLogo.width * ratio;
+                const logoHeight = watermarkLogo.height * ratio;
+                ctx.drawImage(watermarkLogo, -logoWidth / 2, -logoHeight / 2, logoWidth, logoHeight);
+            } else {
+                // 使用文字作為浮水印
+                ctx.fillText(watermarkText, 0, 0);
+            }
+
+            ctx.restore();
+        }
+
+        function getImageBrightness(imageData) {
+            let total = 0;
+            for (let i = 0; i < imageData.data.length; i += 4) {
+                const r = imageData.data[i];
+                const g = imageData.data[i + 1];
+                const b = imageData.data[i + 2];
+                const brightness = (r + g + b) / 3;
+                total += brightness;
+            }
+            return total / (imageData.data.length / 4);
+        }
+
+        function calculateOpacity(brightness) {
+            // 根據背景亮度調整透明度，這裡做一個簡單的線性映射
+            return brightness < 128 ? 0.5 : 0.3;
+        }
+
+        function calculateWatermarkSize(width, height) {
+            let size;
+            if (width === height) {
+                // 正方形
+                size = Math.max(width, height) * 0.66;
+            } else if (height > width) {
+                // 直式長方形
+                size = Math.min(width, height) * 0.66;
+            } else {
+                // 橫式長方形
+                const ratio = width / height;
+                if (ratio <= 2) {
+                    size = width * 0.6;
+                } else {
+                    size = height * 1.2;
+                }
+            }
+            return size / 10; // 調整到合理的字體大小
+        }
+
+        function displayPreviewImages() {
+            previewArea.innerHTML = '';
+            images.forEach((imgObj, index) => {
+                const div = document.createElement('div');
+                div.className = 'preview-image';
+                const img = document.createElement('img');
+                img.src = imgObj.dataUrl;
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = imgObj.selected;
+                checkbox.addEventListener('change', () => {
+                    imgObj.selected = checkbox.checked;
+                });
+                div.appendChild(checkbox);
+                div.appendChild(img);
+                div.addEventListener('click', () => {
+                    displayLargeImage(index);
+                });
+                previewArea.appendChild(div);
+            });
+        }
+
+        function displayLargeImage(index) {
+            const imgObj = images[index];
+            largePreview.src = imgObj.dataUrl;
+        }
+
+        function updateWatermarks() {
+            images.forEach(imgObj => {
+                const ctx = imgObj.canvas.getContext('2d');
+                ctx.clearRect(0, 0, imgObj.canvas.width, imgObj.canvas.height);
+                ctx.drawImage(imgObj.original, 0, 0);
+                addWatermark(ctx, imgObj.canvas.width, imgObj.canvas.height);
+                imgObj.dataUrl = imgObj.canvas.toDataURL();
+            });
+            displayPreviewImages();
+        }
+
+        function selectAllImages() {
+            images.forEach(imgObj => {
+                imgObj.selected = true;
+            });
+            displayPreviewImages();
+        }
+
+        function deselectAllImages() {
+            images.forEach(imgObj => {
+                imgObj.selected = false;
+            });
+            displayPreviewImages();
+        }
+
+        function exportImages() {
+            images.forEach((imgObj, index) => {
+                if (imgObj.selected) {
+                    const link = document.createElement('a');
+                    link.href = imgObj.dataUrl;
+                    link.download = `image_${index + 1}.png`;
+                    link.click();
+                }
+            });
+            alert('浮水印添加成功，圖片已下載。');
+        }
+    </script>
+
+</body>
+</html>
